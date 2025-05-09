@@ -39,6 +39,8 @@ return [
         'client_id' => env('SALLA_CLIENT_ID'),
         'client_secret' => env('SALLA_CLIENT_SECRET'),
         'redirect' => env('SALLA_REDIRECT_URI'),
+        'webhook_secret'     => env('SALLA_WEBHOOK_SECRET'),
+        'authorization_mode' => env('SALLA_AUTHORIZATION_MODE', 'easy')
     ],
 
 ];
