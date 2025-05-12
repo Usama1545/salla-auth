@@ -32,7 +32,7 @@ class SallaAuthService
         $this->provider = new Salla([
             'clientId'     => config('services.salla.client_id'), // The client ID assigned to you by Salla
             'clientSecret' => config('services.salla.client_secret'), // The client password assigned to you by Salla
-            'redirectUri'  => config('services.salla.SALLA_REDIRECT_URI'), // the url for current page in your service
+            'redirectUri'  => config('services.salla.redirect'), // the url for current page in your service
         ]);
     }
 
@@ -145,7 +145,7 @@ class SallaAuthService
      */
     public function isEasyMode(): bool
     {
-        return config('services.salla.authorization_mode') === 'easy';
+        return config('services.salla.authorization_mode') === 'custom';
     }
 
     /**
