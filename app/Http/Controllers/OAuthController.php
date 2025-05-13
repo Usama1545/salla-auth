@@ -25,9 +25,9 @@ class OAuthController extends Controller
 
     public function callback(Request $request)
     {
-        abort_if($this->service->isEasyMode(), 401,'The Authorization mode is not supported');
+        abort_if($this->service->isEasyMode(), 401, 'The Authorization mode is not supported');
 
-        // Try to obtain an access token by utilizing the authorisations code grant.
+        // Try to obtain an access token by utilizing the authorizations code grant.
         try {
             $token = $this->service->getAccessToken('authorization_code', [
                 'code' => $request->code ?? ''
@@ -77,11 +77,23 @@ class OAuthController extends Controller
                 'refresh_token' => $token->getRefreshToken()
             ]);
 
-            return redirect('/dashboard');
+            return response()->json([
+                'message' => 'success',
+                'data' => [
+                    'access_token' => $token->getToken(),
+                    'expires_in' => $token->getExpires(),
+                    'refresh_token' => $token->getRefreshToken()
+                ]
+            ]);
         } catch (IdentityProviderException $e) {
             // Failed to get the access token or merchant details.
             // show an error message to the merchant with good UI
-            return redirect('/dashboard')->withStatus($e->getMessage());
+            return response()->json([
+                'message' => 'error',
+                'data' => [
+                    'error' => $e->getMessage()
+                ]
+            ]);
         }
     }
 }
