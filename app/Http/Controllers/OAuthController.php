@@ -23,7 +23,9 @@ class OAuthController extends Controller
 
     public function redirect()
     {
-        return redirect($this->service->getProvider()->getAuthorizationUrl());
+        return response()->json([
+            'url' => $this->service->getProvider()->getAuthorizationUrl()
+        ]);
     }
 
     public function callback(Request $request)
@@ -71,6 +73,7 @@ class OAuthController extends Controller
             //
             // You can now save the access token and refresh token in your database
             // with the merchant details and redirect him again to Salla dashboard (https://s.salla.sa/apps)
+            dd($request->user(), auth()->user());
             $request->user()->token()->delete();
 
             $request->user()->token()->create([
