@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [OAuthController::class, 'login'])->name('login');
 
-// Route::group(['middleware' => 'auth'], function () {
+// Route::group(['middleware' => 'auth:sanctum'], function () {
     Route::get('/oauth/redirect', [OAuthController::class, 'redirect'])->name('oauth.redirect');
     Route::get('/oauth/callback', [OAuthController::class, 'callback'])->name('oauth.callback');
 
