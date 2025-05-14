@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Services\SallaAuthService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
 
 class OAuthController extends Controller
@@ -27,7 +30,6 @@ class OAuthController extends Controller
     {
         abort_if($this->service->isEasyMode(), 401, 'The Authorization mode is not supported');
 
-        // Try to obtain an access token by utilizing the authorizations code grant.
         try {
             $token = $this->service->getAccessToken('authorization_code', [
                 'code' => $request->code ?? ''
@@ -95,5 +97,31 @@ class OAuthController extends Controller
                 ]
             ]);
         }
+    }
+
+    public function login(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|min:6',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'message' => 'The provided credentials are incorrect.'
+            ], 401);
+        }
+
+        $user->tokens()->delete();
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+            'user' => $user,
+        ]);
     }
 }
