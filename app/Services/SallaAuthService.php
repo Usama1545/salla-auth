@@ -35,15 +35,6 @@ class SallaAuthService
             'clientSecret' => config('services.salla.client_secret'), // The client password assigned to you by Salla
             'redirectUri'  => config('services.salla.redirect'), // the url for current page in your service
         ]);
-
-        // Get the Sanctum token from the authenticated user
-        $user = Auth::user();
-        if ($user) {
-            $sanctumToken = $user->currentAccessToken()->plainTextToken;
-            $this->provider->setHeaders([
-                'Authorization' => 'Bearer ' . $sanctumToken,
-            ]);
-        }
     }
 
     /**
