@@ -198,14 +198,7 @@ class OAuthController extends Controller
             $this->service->forUser($user);
 
             // Get the resource owner (merchant) details from Salla
-            $token = $user->token;
-            $accessToken = new \League\OAuth2\Client\Token\AccessToken([
-                'access_token' => $token->access_token,
-                'refresh_token' => $token->refresh_token,
-                'expires' => $token->expires_in,
-            ]);
-
-            $owner = $this->service->getResourceOwner($accessToken);
+            $owner = $this->service->getResourceOwner(null);
 
             return response()->json([
                 'message' => 'success',

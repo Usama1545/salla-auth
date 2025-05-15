@@ -29,6 +29,11 @@ class SallaAuthService
      */
     public $token;
 
+    /**
+     * @var User
+     */
+    public $user;
+
     public function __construct()
     {
         $this->provider = new Salla([
@@ -39,15 +44,17 @@ class SallaAuthService
     }
 
     /**
-     * Get the token from the user model.
+     * Set the user for the service.
      *
-     * @param  User  $user
-     *
+     * @param User $user
      * @return $this
      */
-    public function forUser($user)
+    public function forUser(User $user): self
     {
+        $this->user = $user;
+
         if ($user->token) {
+            // Always decrypt tokens from the database for internal use
             $this->token = new AccessToken([
                 'access_token' => TokenEncryption::encrypt_decrypt($user->token->access_token, true),
                 'refresh_token' => TokenEncryption::encrypt_decrypt($user->token->refresh_token, true),
@@ -57,8 +64,10 @@ class SallaAuthService
 
         return $this;
     }
-
+    
     /**
+     * Get the Salla provider instance
+     * 
      * @return Salla
      */
     public function getProvider(): Salla
@@ -114,6 +123,23 @@ class SallaAuthService
 
             // Store the new token in the service
             $this->token = $token;
+
+            // Update the token in the database
+            if ($this->user && $this->user->token) {
+                // Encrypt tokens for storage
+                $encryptedAccessToken = TokenEncryption::encrypt_decrypt($token->getToken());
+                $encryptedRefreshToken = TokenEncryption::encrypt_decrypt($token->getRefreshToken());
+                
+                $this->user->token()->update([
+                    'access_token'  => $encryptedAccessToken,
+                    'expires_in'    => $token->getExpires(),
+                    'expires_at'    => now()->addSeconds($token->getExpires()),
+                    'refresh_token' => $encryptedRefreshToken
+                ]);
+                
+                // Refresh the user to get the updated token
+                $this->user->refresh();
+            }
 
             return $token;
         } catch (\Exception $e) {
