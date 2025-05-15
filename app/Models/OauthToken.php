@@ -12,9 +12,21 @@ class OauthToken extends Model
      * @var array
      */
     protected $guarded = [];
+    protected $fillable = [
+        'merchant',
+        'access_token',
+        'expires_in',
+        'refresh_token',
+        'user_id',
+    ];
 
     public function hasExpired()
     {
         return now()->timestamp > $this->expires_in;
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

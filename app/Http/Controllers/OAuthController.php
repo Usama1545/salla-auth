@@ -126,4 +126,34 @@ class OAuthController extends Controller
             'user' => $user,
         ]);
     }
+
+    /**
+     * Refresh the Salla access token using the refresh token
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function refreshToken(Request $request)
+    {
+        try {
+            $this->service->forUser($request->user());
+            $token = $this->service->getNewAccessToken();
+
+            return response()->json([
+                'message' => 'success',
+                'data' => [
+                    'access_token' => $token->getToken(),
+                    'expires_in' => $token->getExpires(),
+                    'refresh_token' => $token->getRefreshToken()
+                ]
+            ]);
+        } catch (IdentityProviderException $e) {
+            return response()->json([
+                'message' => 'error',
+                'data' => [
+                    'error' => $e->getMessage()
+                ]
+            ], 401);
+        }
+    }
 }
