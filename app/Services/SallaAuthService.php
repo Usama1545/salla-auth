@@ -64,7 +64,7 @@ class SallaAuthService
 
         return $this;
     }
-    
+
     /**
      * Get the Salla provider instance
      * 
@@ -129,14 +129,14 @@ class SallaAuthService
                 // Encrypt tokens for storage
                 $encryptedAccessToken = TokenEncryption::encrypt_decrypt($token->getToken());
                 $encryptedRefreshToken = TokenEncryption::encrypt_decrypt($token->getRefreshToken());
-                
+
                 $this->user->token()->update([
                     'access_token'  => $encryptedAccessToken,
                     'expires_in'    => $token->getExpires(),
-                    'expires_at'    => now()->addSeconds($token->getExpires()),
+                    'expires_at'    => $this->calculateSafeExpiresAt($token->getExpires()),
                     'refresh_token' => $encryptedRefreshToken
                 ]);
-                
+
                 // Refresh the user to get the updated token
                 $this->user->refresh();
             }
@@ -146,6 +146,30 @@ class SallaAuthService
             // If refresh token is invalid, we need to redirect to login
             throw new \Exception('Refresh token is invalid or expired. Please login again: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Calculate a safe expires_at date that won't exceed MySQL's datetime limits
+     *
+     * @param int $expiresIn
+     * @return \Carbon\Carbon
+     */
+    protected function calculateSafeExpiresAt($expiresIn)
+    {
+        // If expires_in is very large (likely a timestamp), use a safe default
+        if ($expiresIn > 31536000) { // More than 1 year in seconds
+            // Just use a safe default of 1 day
+            return now()->addDay();
+        }
+
+        // Ensure expires_in is a reasonable value
+        if ($expiresIn <= 0) {
+            return now()->addHour(); // Default to 1 hour if value is invalid
+        }
+
+        // Normal case: expires_in is seconds from now (cap at 1 year to be safe)
+        $expiresIn = min($expiresIn, 31536000); // Cap at 1 year
+        return now()->addSeconds($expiresIn);
     }
 
     public function request(string $method, string $url, array $options = [])

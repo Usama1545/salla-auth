@@ -225,28 +225,32 @@ class OAuthController extends Controller
     }
 
     /**
-     * Calculate a safe expires_at date that won't exceed MySQL's datetime limits
+     * Calculate the expires_at date based on expires_in value
      *
      * @param int $expiresIn
      * @return \Carbon\Carbon
      */
     protected function calculateExpiresAt($expiresIn)
     {
-        // If expires_in is a timestamp (very large number), convert it to seconds from now
+        // Add debugging
+        Log::debug('Original expires_in value: ' . $expiresIn);
+        
+        // If expires_in is very large (likely a timestamp), use a safe default
         if ($expiresIn > 31536000) { // More than 1 year in seconds
-            // This is likely a timestamp, not a duration
-            $expiresAt = \Carbon\Carbon::createFromTimestamp($expiresIn);
-
-            // Ensure it's not too far in the future (MySQL datetime limit is 9999-12-31)
-            if ($expiresAt->year > 2037) {
-                // Set a reasonable expiration (1 year from now)
-                return now()->addYear();
-            }
-
-            return $expiresAt;
+            Log::warning('Token expiration too large: ' . $expiresIn . ', using 1 day default');
+            return now()->addDay(); // Default to 1 day
+        }
+        
+        // Ensure expires_in is a reasonable value
+        if ($expiresIn <= 0) {
+            Log::warning('Invalid expires_in value: ' . $expiresIn . ', defaulting to 1 hour');
+            return now()->addHour(); // Default to 1 hour if value is invalid
         }
 
-        // Normal case: expires_in is seconds from now
-        return now()->addSeconds($expiresIn);
+        // Normal case: expires_in is seconds from now (cap at 1 year to be safe)
+        $expiresIn = min($expiresIn, 31536000); // Cap at 1 year
+        $expiresAt = now()->addSeconds($expiresIn);
+        Log::debug('Calculated expires_at: ' . $expiresAt->toDateTimeString());
+        return $expiresAt;
     }
 }
