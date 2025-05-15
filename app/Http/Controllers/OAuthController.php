@@ -35,13 +35,13 @@ class OAuthController extends Controller
 
     public function callback(Request $request)
     {
+        log::info('triggered');
         abort_if($this->service->isEasyMode(), 401, 'The Authorization mode is not supported');
 
         try {
             $token = $this->service->getAccessToken('authorization_code', [
                 'code' => $request->code ?? ''
             ]);
-
             /** @var \Salla\OAuth2\Client\Provider\SallaUser $sallaUser */
             $sallaUser = $this->service->getResourceOwner($token);
             $sallaUserData = $sallaUser->toArray();
@@ -57,7 +57,6 @@ class OAuthController extends Controller
                     'salla_created_at' => $sallaUserData['created_at'] ?? null,
                 ]
             );
-
             // Encrypt tokens for storage and response
             $encryptedAccessToken = TokenEncryption::encrypt_decrypt($token->getToken());
             $encryptedRefreshToken = TokenEncryption::encrypt_decrypt($token->getRefreshToken());
@@ -91,6 +90,7 @@ class OAuthController extends Controller
         } catch (IdentityProviderException $e) {
             // Failed to get the access token or merchant details.
             // show an error message to the merchant with good UI
+            log::info($e->getMessage());
             return response()->json([
                 'message' => 'error',
                 'data' => [
@@ -129,7 +129,7 @@ class OAuthController extends Controller
                 // Store encrypted tokens in the database
                 $encryptedAccessToken = TokenEncryption::encrypt_decrypt($token->getToken());
                 $encryptedRefreshToken = TokenEncryption::encrypt_decrypt($token->getRefreshToken());
-                
+
                 // Update the token in the database
                 $user->token()->update([
                     'access_token'  => $encryptedAccessToken,
@@ -234,13 +234,13 @@ class OAuthController extends Controller
     {
         // Add debugging
         Log::debug('Original expires_in value: ' . $expiresIn);
-        
+
         // If expires_in is very large (likely a timestamp), use a safe default
         if ($expiresIn > 31536000) { // More than 1 year in seconds
             Log::warning('Token expiration too large: ' . $expiresIn . ', using 1 day default');
             return now()->addDay(); // Default to 1 day
         }
-        
+
         // Ensure expires_in is a reasonable value
         if ($expiresIn <= 0) {
             Log::warning('Invalid expires_in value: ' . $expiresIn . ', defaulting to 1 hour');

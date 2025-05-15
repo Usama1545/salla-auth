@@ -8,7 +8,7 @@ Route::get('/oauth/callback', [OAuthController::class, 'callback'])->name('oauth
 Route::get('/oauth/redirect', [OAuthController::class, 'redirect'])->name('oauth.redirect');
 
 Route::middleware(['salla.auth'])->group(function () {
-    Route::post('/oauth/refresh-token', [OAuthController::class, 'refreshToken'])->name('oauth.refresh-token');
+    Route::get('/oauth/refresh-token', [OAuthController::class, 'refreshToken'])->name('oauth.refresh-token');
     Route::get('/oauth/owner', [OAuthController::class, 'getOwnerDetails'])->name('oauth.owner');
 });
 
