@@ -18,6 +18,13 @@ return new class extends Migration
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();
+            
+            // Salla user fields
+            $table->string('salla_id')->nullable();
+            $table->string('mobile')->nullable();
+            $table->string('role')->nullable();
+            $table->timestamp('salla_created_at')->nullable();
+            
             $table->timestamps();
         });
 

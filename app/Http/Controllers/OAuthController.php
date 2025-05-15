@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Store;
 use App\Services\SallaAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
 
 class OAuthController extends Controller
@@ -37,57 +39,70 @@ class OAuthController extends Controller
                 'code' => $request->code ?? ''
             ]);
 
-            /** @var \Salla\OAuth2\Client\Provider\SallaUser $user */
-            $user = $this->service->getResourceOwner($token);
-            /**
-             *  {
-             *      "id": 181690847,
-             *      "name": "eman elsbay",
-             *      "email": "user@salla.sa",
-             *      "mobile": "555454545",
-             *      "role": "user",
-             *      "created_at": "2018-04-28 17:46:25",
-             *      "store": {
-             *        "id": 633170215,
-             *        "owner_id": 181690847,
-             *        "owner_name": "eman elsbay",
-             *        "username": "good-store",
-             *        "name": "متجر الموضة",
-             *        "avatar": "https://cdn.salla.sa/XrXj/g2aYPGNvafLy0TUxWiFn7OqPkKCJFkJQz4Pw8WsS.jpeg",
-             *        "store_location": "26.989000873354787,49.62477639657287",
-             *        "plan": "special",
-             *        "status": "active",
-             *        "created_at": "2019-04-28 17:46:25"
-             *      }
-             *    }
-             */
-            // var_export($user->toArray());
+            /** @var \Salla\OAuth2\Client\Provider\SallaUser $sallaUser */
+            $sallaUser = $this->service->getResourceOwner($token);
+            $sallaUserData = $sallaUser->toArray();
 
-            // echo 'User ID: '.$user->getId()."<br>";
-            // echo 'User Name: '.$user->getName()."<br>";
-            // echo 'Store ID: '.$user->getStoreID()."<br>";
-            // echo 'Store Name: '.$user->getStoreName()."<br>";
+            // Create or update the user based on Salla data
+            $user = User::updateOrCreate(
+                ['email' => $sallaUserData['email']],
+                [
+                    'name' => $sallaUserData['name'],
+                    'password' => Hash::make(Str::random(16)), // Random password
+                    'salla_id' => $sallaUserData['id'],
+                    'mobile' => $sallaUserData['mobile'] ?? null,
+                    'role' => $sallaUserData['role'] ?? null,
+                    'salla_created_at' => $sallaUserData['created_at'] ?? null,
+                ]
+            );
 
-            //
-            // 🥳
-            //
-            // You can now save the access token and refresh token in your database
-            // with the merchant details and redirect him again to Salla dashboard (https://s.salla.sa/apps)
-            // dd($request->user(), auth()->user());
-            $request->user()->token()->delete();
+            // Create or update the store
+            if (isset($sallaUserData['store'])) {
+                $store = Store::updateOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'salla_id' => $sallaUserData['store']['id'] ?? null,
+                        'owner_id' => $sallaUserData['store']['owner_id'] ?? null,
+                        'owner_name' => $sallaUserData['store']['owner_name'] ?? null,
+                        'username' => $sallaUserData['store']['username'] ?? null,
+                        'name' => $sallaUserData['store']['name'] ?? null,
+                        'avatar' => $sallaUserData['store']['avatar'] ?? null,
+                        'store_location' => $sallaUserData['store']['store_location'] ?? null,
+                        'plan' => $sallaUserData['store']['plan'] ?? null,
+                        'status' => $sallaUserData['store']['status'] ?? null,
+                        'salla_created_at' => $sallaUserData['store']['created_at'] ?? null,
+                    ]
+                );
+            }
 
-            $request->user()->token()->create([
-                'access_token'  => $token->getToken(),
-                'expires_in'    => $token->getExpires(),
-                'refresh_token' => $token->getRefreshToken()
-            ]);
+            // Delete existing tokens
+            $user->tokens()->delete();
+
+            // Create a new Sanctum token
+            $sanctumToken = $user->createToken('auth_token')->plainTextToken;
+
+            // Create or update OAuth token
+            $user->token()->updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'access_token' => $token->getToken(),
+                    'expires_in' => $token->getExpires(),
+                    'refresh_token' => $token->getRefreshToken(),
+                    'merchant' => $sallaUserData['store']['id'] ?? null,
+                ]
+            );
 
             return response()->json([
                 'message' => 'success',
                 'data' => [
-                    'access_token' => $token->getToken(),
-                    'expires_in' => $token->getExpires(),
-                    'refresh_token' => $token->getRefreshToken()
+                    'access_token' => $sanctumToken,
+                    'token_type' => 'Bearer',
+                    'user' => $user,
+                    'salla_token' => [
+                        'access_token' => $token->getToken(),
+                        'expires_in' => $token->getExpires(),
+                        'refresh_token' => $token->getRefreshToken()
+                    ]
                 ]
             ]);
         } catch (IdentityProviderException $e) {
@@ -98,7 +113,7 @@ class OAuthController extends Controller
                 'data' => [
                     'error' => $e->getMessage()
                 ]
-            ]);
+            ], 401);
         }
     }
 
