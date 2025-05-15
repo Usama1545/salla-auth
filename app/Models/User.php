@@ -8,7 +8,6 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\OauthToken;
-use App\Models\Store;
 
 class User extends Authenticatable
 {
@@ -40,13 +39,5 @@ class User extends Authenticatable
     public function token()
     {
         return $this->hasOne(OauthToken::class);
-    }
-
-    /**
-     * Get the store associated with the user.
-     */
-    public function store()
-    {
-        return $this->hasOne(Store::class);
     }
 }

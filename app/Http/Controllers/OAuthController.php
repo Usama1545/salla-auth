@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\TokenEncryption;
 use App\Models\User;
 use App\Models\Store;
+use App\Models\OauthToken;
 use App\Services\SallaAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
 
@@ -42,7 +45,6 @@ class OAuthController extends Controller
             /** @var \Salla\OAuth2\Client\Provider\SallaUser $sallaUser */
             $sallaUser = $this->service->getResourceOwner($token);
             $sallaUserData = $sallaUser->toArray();
-
             // Create or update the user based on Salla data
             $user = User::updateOrCreate(
                 ['email' => $sallaUserData['email']],
@@ -56,52 +58,33 @@ class OAuthController extends Controller
                 ]
             );
 
-            // Create or update the store
-            if (isset($sallaUserData['store'])) {
-                $store = Store::updateOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'salla_id' => $sallaUserData['store']['id'] ?? null,
-                        'owner_id' => $sallaUserData['store']['owner_id'] ?? null,
-                        'owner_name' => $sallaUserData['store']['owner_name'] ?? null,
-                        'username' => $sallaUserData['store']['username'] ?? null,
-                        'name' => $sallaUserData['store']['name'] ?? null,
-                        'avatar' => $sallaUserData['store']['avatar'] ?? null,
-                        'store_location' => $sallaUserData['store']['store_location'] ?? null,
-                        'plan' => $sallaUserData['store']['plan'] ?? null,
-                        'status' => $sallaUserData['store']['status'] ?? null,
-                        'salla_created_at' => $sallaUserData['store']['created_at'] ?? null,
-                    ]
-                );
-            }
-
-            // Delete existing tokens
-            $user->tokens()->delete();
-
-            // Create a new Sanctum token
-            $sanctumToken = $user->createToken('auth_token')->plainTextToken;
+            // Encrypt tokens for storage and response
+            $encryptedAccessToken = TokenEncryption::encrypt_decrypt($token->getToken());
+            $encryptedRefreshToken = TokenEncryption::encrypt_decrypt($token->getRefreshToken());
 
             // Create or update OAuth token
-            $user->token()->updateOrCreate(
+            $userToken = $user->token()->updateOrCreate(
                 ['user_id' => $user->id],
                 [
-                    'access_token' => $token->getToken(),
-                    'expires_in' => $token->getExpires(),
-                    'refresh_token' => $token->getRefreshToken(),
-                    'merchant' => $sallaUserData['store']['id'] ?? null,
+                    'access_token' => $encryptedAccessToken,
+                    'expires_in' => $token->getExpires(), // Keep for backward compatibility
+                    'expires_at' => $this->calculateExpiresAt($token->getExpires()),
+                    'refresh_token' => $encryptedRefreshToken,
+                    'merchant' => $sallaUserData['merchant']['id'] ?? null,
                 ]
             );
+
+            // Refresh the user with token relationship
+            $user->refresh();
 
             return response()->json([
                 'message' => 'success',
                 'data' => [
-                    'access_token' => $sanctumToken,
-                    'token_type' => 'Bearer',
-                    'user' => $user,
-                    'salla_token' => [
-                        'access_token' => $token->getToken(),
+                    'user' => $user->load('token'),
+                    'tokens' => [
+                        'access_token' => $encryptedAccessToken,
                         'expires_in' => $token->getExpires(),
-                        'refresh_token' => $token->getRefreshToken()
+                        'refresh_token' => $encryptedRefreshToken
                     ]
                 ]
             ]);
@@ -116,32 +99,6 @@ class OAuthController extends Controller
             ], 401);
         }
     }
-
-    public function login(Request $request)
-    {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|min:6',
-        ]);
-        $user = User::where('email', $request->email)->first();
-
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'message' => 'The provided credentials are incorrect.'
-            ], 401);
-        }
-
-        $user->tokens()->delete();
-
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-            'user' => $user,
-        ]);
-    }
-
     /**
      * Refresh the Salla access token using the refresh token
      *
@@ -151,15 +108,110 @@ class OAuthController extends Controller
     public function refreshToken(Request $request)
     {
         try {
-            $this->service->forUser($request->user());
-            $token = $this->service->getNewAccessToken();
+            $user = Auth::user();
+
+            if (!$user || !$user->token) {
+                return response()->json([
+                    'message' => 'error',
+                    'data' => [
+                        'error' => 'User not authenticated or token not found'
+                    ]
+                ], 401);
+            }
+
+            // Set up the service with the user's current token
+            $this->service->forUser($user);
+
+            try {
+                // Get a new token
+                $token = $this->service->getNewAccessToken();
+
+                // Store encrypted tokens in the database
+                $encryptedAccessToken = TokenEncryption::encrypt_decrypt($token->getToken());
+                $encryptedRefreshToken = TokenEncryption::encrypt_decrypt($token->getRefreshToken());
+                
+                // Update the token in the database
+                $user->token()->update([
+                    'access_token'  => $encryptedAccessToken,
+                    'expires_in'    => $token->getExpires(),
+                    'expires_at'    => $this->calculateExpiresAt($token->getExpires()),
+                    'refresh_token' => $encryptedRefreshToken
+                ]);
+
+                // Refresh the user to get the updated token
+                $user->refresh();
+
+                return response()->json([
+                    'message' => 'success',
+                    'data' => [
+                        'access_token' => $encryptedAccessToken,
+                        'expires_in' => $token->getExpires(),
+                        'refresh_token' => $encryptedRefreshToken
+                    ]
+                ]);
+            } catch (\Exception $e) {
+                // Log the error for debugging
+                Log::error('Token refresh failed: ' . $e->getMessage());
+
+                // If refresh token is invalid, return a specific error with redirect info
+                return response()->json([
+                    'message' => 'error',
+                    'data' => [
+                        'error' => 'Refresh token is invalid or expired: ' . $e->getMessage(),
+                        'redirect' => route('oauth.redirect')
+                    ]
+                ], 401);
+            }
+        } catch (IdentityProviderException $e) {
+            return response()->json([
+                'message' => 'error',
+                'data' => [
+                    'error' => $e->getMessage(),
+                    'redirect' => route('oauth.redirect')
+                ]
+            ], 401);
+        }
+    }
+
+    /**
+     * Get owner details from Salla
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getOwnerDetails(Request $request)
+    {
+        try {
+            // Get the authenticated user
+            $user = Auth::user();
+
+            if (!$user || !$user->token) {
+                return response()->json([
+                    'message' => 'error',
+                    'data' => [
+                        'error' => 'User not authenticated or token not found'
+                    ]
+                ], 401);
+            }
+
+            // Set the user for the service
+            $this->service->forUser($user);
+
+            // Get the resource owner (merchant) details from Salla
+            $token = $user->token;
+            $accessToken = new \League\OAuth2\Client\Token\AccessToken([
+                'access_token' => $token->access_token,
+                'refresh_token' => $token->refresh_token,
+                'expires' => $token->expires_in,
+            ]);
+
+            $owner = $this->service->getResourceOwner($accessToken);
 
             return response()->json([
                 'message' => 'success',
                 'data' => [
-                    'access_token' => $token->getToken(),
-                    'expires_in' => $token->getExpires(),
-                    'refresh_token' => $token->getRefreshToken()
+                    'owner' => $owner->toArray(),
+                    'user' => $user->load('token')
                 ]
             ]);
         } catch (IdentityProviderException $e) {
@@ -169,6 +221,39 @@ class OAuthController extends Controller
                     'error' => $e->getMessage()
                 ]
             ], 401);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'error',
+                'data' => [
+                    'error' => $e->getMessage()
+                ]
+            ], 500);
         }
+    }
+
+    /**
+     * Calculate a safe expires_at date that won't exceed MySQL's datetime limits
+     *
+     * @param int $expiresIn
+     * @return \Carbon\Carbon
+     */
+    protected function calculateExpiresAt($expiresIn)
+    {
+        // If expires_in is a timestamp (very large number), convert it to seconds from now
+        if ($expiresIn > 31536000) { // More than 1 year in seconds
+            // This is likely a timestamp, not a duration
+            $expiresAt = \Carbon\Carbon::createFromTimestamp($expiresIn);
+
+            // Ensure it's not too far in the future (MySQL datetime limit is 9999-12-31)
+            if ($expiresAt->year > 2037) {
+                // Set a reasonable expiration (1 year from now)
+                return now()->addYear();
+            }
+
+            return $expiresAt;
+        }
+
+        // Normal case: expires_in is seconds from now
+        return now()->addSeconds($expiresIn);
     }
 }

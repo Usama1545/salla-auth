@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\TokenEncryption;
 use App\Models\OauthToken;
 use App\Models\User;
 use Illuminate\Support\Traits\ForwardsCalls;
@@ -24,7 +25,7 @@ class SallaAuthService
     protected $provider;
 
     /**
-     * @var OauthToken
+     * @var AccessToken
      */
     public $token;
 
@@ -44,9 +45,15 @@ class SallaAuthService
      *
      * @return $this
      */
-    public function forUser(User $user)
+    public function forUser($user)
     {
-        $this->token = $user->token;
+        if ($user->token) {
+            $this->token = new AccessToken([
+                'access_token' => TokenEncryption::encrypt_decrypt($user->token->access_token, true),
+                'refresh_token' => TokenEncryption::encrypt_decrypt($user->token->refresh_token, true),
+                'expires' => $user->token->expires_in,
+            ]);
+        }
 
         return $this;
     }
@@ -86,7 +93,7 @@ class SallaAuthService
      */
     public function getStoreDetail()
     {
-        return $this->provider->getResourceOwner(new AccessToken($this->token->toArray()));
+        return $this->provider->getResourceOwner($this->token);
     }
 
     /**
@@ -97,23 +104,22 @@ class SallaAuthService
      */
     public function getNewAccessToken()
     {
-        if ($this->token->hasExpired()) {
-            return new AccessToken($this->token->toArray());
+        try {
+            // Always request a new access token via refresh token
+            // The refresh token is already decrypted in the forUser method
+            // Do NOT encrypt or decrypt it again here
+            $token = $this->provider->getAccessToken('refresh_token', [
+                'refresh_token' => $this->token->getRefreshToken()
+            ]);
+
+            // Store the new token in the service
+            $this->token = $token;
+
+            return $token;
+        } catch (\Exception $e) {
+            // If refresh token is invalid, we need to redirect to login
+            throw new \Exception('Refresh token is invalid or expired. Please login again: ' . $e->getMessage());
         }
-
-        // let's request a new access token via refresh token.
-        $token = $this->provider->getAccessToken('refresh_token', [
-            'refresh_token' => $this->token->refresh_token
-        ]);
-
-        // lets update user tokens
-        $this->token->update([
-            'access_token'  => $token->getToken(),
-            'expires_in'    => $token->getExpires(),
-            'refresh_token' => $token->getRefreshToken()
-        ]);
-
-        return $token;
     }
 
     public function request(string $method, string $url, array $options = [])
@@ -122,7 +128,7 @@ class SallaAuthService
         // If the token expired, lets request a new one and save it to the database
         $this->getNewAccessToken();
 
-        return $this->provider->fetchResource($method, $url, $this->token->access_token, $options);
+        return $this->provider->fetchResource($method, $url, $this->token->getToken(), $options);
     }
 
     /**
@@ -157,6 +163,6 @@ class SallaAuthService
      */
     public function getResourceOwner(?AccessToken $token)
     {
-        return $this->provider->getResourceOwner($token ?: new AccessToken($this->token->toArray()));
+        return $this->provider->getResourceOwner($token ?: $this->token);
     }
 }

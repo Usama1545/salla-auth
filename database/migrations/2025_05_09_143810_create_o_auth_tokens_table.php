@@ -20,6 +20,7 @@ class CreateOauthTokensTable extends Migration
             $table->bigInteger('merchant')->nullable();
             $table->text('access_token');
             $table->bigInteger('expires_in');
+            $table->timestamp('expires_at')->nullable();
             $table->text('refresh_token');
             $table->timestamps();
         });
