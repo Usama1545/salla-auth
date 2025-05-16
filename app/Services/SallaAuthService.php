@@ -176,7 +176,9 @@ class SallaAuthService
     {
         // you need always to check the token before made a request
         // If the token expired, lets request a new one and save it to the database
-        $this->getNewAccessToken();
+        if($this->token->getExpires() < now()->getTimestamp()) {
+            $this->getNewAccessToken();
+        }
 
         return $this->provider->fetchResource($method, $url, $this->token->getToken(), $options);
     }
