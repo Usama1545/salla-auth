@@ -9,12 +9,7 @@ Route::get('/oauth/callback', [OAuthController::class, 'callback'])->name('oauth
 Route::get('/oauth/redirect', [OAuthController::class, 'redirect'])->name('oauth.redirect');
 
 Route::middleware(['salla.auth'])->group(function () {
-<<<<<<< Updated upstream
-    Route::get('/oauth/refresh-token', [OAuthController::class, 'refreshToken'])->name('oauth.refresh-token');
-=======
-    // OAuth routes
     Route::post('/oauth/refresh-token', [OAuthController::class, 'refreshToken'])->name('oauth.refresh-token');
->>>>>>> Stashed changes
     Route::get('/oauth/owner', [OAuthController::class, 'getOwnerDetails'])->name('oauth.owner');
     
     // Product API routes
