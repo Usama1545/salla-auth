@@ -11,6 +11,7 @@ use League\OAuth2\Client\Token\AccessToken;
 use Salla\OAuth2\Client\Provider\Salla;
 use Salla\OAuth2\Client\Provider\SallaUser;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @mixin Salla
@@ -172,15 +173,75 @@ class SallaAuthService
         return now()->addSeconds($expiresIn);
     }
 
+    /**
+     * Make a request to the Salla API.
+     *
+     * @param string $method HTTP method (GET, POST, PUT, DELETE)
+     * @param string $url API endpoint URL
+     * @param array $options Request options
+     * @return mixed
+     * @throws \Exception
+     */
     public function request(string $method, string $url, array $options = [])
     {
-        // you need always to check the token before made a request
-        // If the token expired, lets request a new one and save it to the database
+        // Check if the token is expired
         if($this->token->getExpires() < now()->getTimestamp()) {
             $this->getNewAccessToken();
         }
-
-        return $this->provider->fetchResource($method, $url, $this->token->getToken(), $options);
+        
+        // Log the request details for debugging
+        Log::debug('Salla API Request', [
+            'method' => $method,
+            'url' => $url,
+            'options' => $options
+        ]);
+        
+        try {
+            // Prepare the request options
+            $requestOptions = [
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json'
+                ]
+            ];
+            
+            // For GET requests, include query parameters
+            if ($method === 'GET' && isset($options['query'])) {
+                $url .= '?' . http_build_query($options['query']);
+            } 
+            // For POST, PUT, DELETE formats, directly set the body as a JSON string
+            else if (isset($options['json'])) {
+                // Convert the PHP array to a JSON string and set as body
+                $requestOptions['body'] = json_encode($options['json']);
+                
+                Log::debug('Request body set as JSON', [
+                    'json_body' => $requestOptions['body']
+                ]);
+            }
+            
+            // Make the API request with the formatted options
+            $response = $this->provider->fetchResource(
+                $method, 
+                $url, 
+                $this->token->getToken(), 
+                $requestOptions
+            );
+            
+            Log::debug('Salla API Response', [
+                'status' => 'success',
+                'response' => $response
+            ]);
+            
+            return $response;
+        } catch (\Exception $e) {
+            Log::error('Salla API Error', [
+                'error' => $e->getMessage(),
+                'method' => $method,
+                'url' => $url
+            ]);
+            
+            throw $e;
+        }
     }
 
     /**

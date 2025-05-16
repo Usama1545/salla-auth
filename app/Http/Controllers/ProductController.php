@@ -121,24 +121,61 @@ class ProductController extends Controller
             
             // Get validated data from the request
             $data = $request->validated();
-
-            // Call Salla API to create product
+            
+            // Debug: Log the complete payload
+            Log::debug('Salla product creation payload', ['payload' => $data]);
+            
+            // Try with a minimal payload first to diagnose the issue
+            $minimalData = [
+                'name' => $data['name'],
+                'price' => $data['price'],
+                'status' => $data['status'] ?? 'active',
+                'product_type' => $data['product_type'] ?? 'product'
+            ];
+            
+            Log::debug('Trying with minimal payload', ['minimal_payload' => $minimalData]);
+            
+            // Call Salla API with minimal payload first
             $response = $this->service->request('POST', 'https://api.salla.dev/admin/v2/products', [
-                'json' => $data
+                'json' => $minimalData
             ]);
-
+            
             return response()->json([
                 'message' => 'success',
                 'data' => $response
             ], 201);
         } catch (\Exception $e) {
             Log::error('Failed to create product: ' . $e->getMessage());
+            
+            // Try to get response details if available
+            $responseBody = null;
+            $statusCode = 500;
+            
+            if (method_exists($e, 'getResponse') && $e->getResponse()) {
+                $responseBody = (string) $e->getResponse()->getBody();
+                $statusCode = $e->getResponse()->getStatusCode();
+                Log::error('Salla API error response: ' . $responseBody);
+                
+                // Log request details that caused the error
+                if (method_exists($e, 'getRequest') && $e->getRequest()) {
+                    $request = $e->getRequest();
+                    Log::error('Failed request details', [
+                        'method' => $request->getMethod(),
+                        'uri' => $request->getUri(),
+                        'headers' => $request->getHeaders(),
+                        'body' => (string) $request->getBody()
+                    ]);
+                }
+            }
+            
             return response()->json([
                 'message' => 'error',
                 'data' => [
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
+                    'api_response' => $responseBody ? json_decode($responseBody, true) : null,
+                    'debug_info' => 'Check server logs for detailed information'
                 ]
-            ], 500);
+            ], $statusCode);
         }
     }
 
