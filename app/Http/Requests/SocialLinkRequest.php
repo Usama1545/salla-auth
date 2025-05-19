@@ -21,7 +21,7 @@ class SocialLinkRequest extends FormRequest
      */
     public function rules(): array
     {
-        $id = $this->route("id");
+        $id = $this->route("social_link");
         return [
             'name' => 'required|string|max:255|unique:social_links,name,' . $id,
             'value' => 'required|string|max:255',
