@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\OAuthController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\SocialLinkController;
 use App\Http\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -11,7 +12,7 @@ Route::get('/oauth/redirect', [OAuthController::class, 'redirect'])->name('oauth
 Route::middleware(['salla.auth'])->group(function () {
     Route::post('/oauth/refresh-token', [OAuthController::class, 'refreshToken'])->name('oauth.refresh-token');
     Route::get('/oauth/owner', [OAuthController::class, 'getOwnerDetails'])->name('oauth.owner');
-    
+    Route::apiResource('social-links', SocialLinkController::class);
     // Product API routes
     Route::prefix('products')->group(function () {
         Route::get('/', [ProductController::class, 'index'])->name('products.index');

@@ -40,4 +40,9 @@ class User extends Authenticatable
     {
         return $this->hasOne(OauthToken::class);
     }
+
+    public function socialLinks()
+    {
+        return $this->hasMany(SocialLink::class);
+    }
 }
