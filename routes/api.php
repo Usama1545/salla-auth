@@ -15,15 +15,12 @@ Route::middleware(['salla.auth'])->group(function () {
     
     // Social Links routes
     Route::apiResource('social-links', SocialLinkController::class);
-<<<<<<< Updated upstream
     Route::get('social-tracking-settings', [SocialLinkController::class, 'settings'])->name('social-tracking-settings');
-=======
     Route::get('/store/{storeId}/social-links', [SocialLinkController::class, 'getByStoreId'])->name('social-links.by-store');
     
     // Facebook Conversion API route
     Route::post('/facebook/conversion', [SocialLinkController::class, 'trackFacebookEvent'])->name('facebook.conversion');
     
->>>>>>> Stashed changes
     // Product API routes
     Route::prefix('products')->group(function () {
         Route::get('/', [ProductController::class, 'index'])->name('products.index');
