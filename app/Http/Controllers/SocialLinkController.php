@@ -2,12 +2,8 @@
 
 namespace App\Http\Controllers;
 
-<<<<<<< Updated upstream
-=======
 use App\Helpers\TokenEncryption;
-use App\Http\Requests\SocialLinkRequest;
 use App\Models\SocialLink;
->>>>>>> Stashed changes
 use App\Services\SallaAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
