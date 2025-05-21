@@ -2,13 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\SocialLinkRequest;
-use App\Models\SocialLink;
 use App\Services\SallaAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Mockery\Exception;
 
 class SocialLinkController extends Controller
 {
@@ -88,6 +85,18 @@ class SocialLinkController extends Controller
                 ]
             ], 500);
         }
+    }
+
+    public function settings()
+    {
+        $settings = [];
+
+        $user = Auth::user();
+        $socialLinks = $user->socialLinks()->get();
+        foreach ($socialLinks as $value) {
+            $settings[$value['name']] = $value['value'];
+        }
+        return response()->json($settings);
     }
 
 }

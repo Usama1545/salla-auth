@@ -13,6 +13,7 @@ Route::middleware(['salla.auth'])->group(function () {
     Route::get('/oauth/refresh-token', [OAuthController::class, 'refreshToken'])->name('oauth.refresh-token');
     Route::get('/oauth/owner', [OAuthController::class, 'getOwnerDetails'])->name('oauth.owner');
     Route::apiResource('social-links', SocialLinkController::class);
+    Route::get('social-tracking-settings', [SocialLinkController::class, 'settings'])->name('social-tracking-settings');
     // Product API routes
     Route::prefix('products')->group(function () {
         Route::get('/', [ProductController::class, 'index'])->name('products.index');
