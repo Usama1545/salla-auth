@@ -19,11 +19,7 @@ class SocialLink extends Model
      *
      * @var array
      */
-    protected $hidden = [
-        'value' => function () {
-            return $this->name === 'access_token_conversion_facebook';
-        }
-    ];
+    protected $hidden = [];
 
     /**
      * Get the user that owns the social link.
@@ -45,9 +41,9 @@ class SocialLink extends Model
     {
         // If this is the Facebook access token, it's stored encrypted
         if ($this->name === 'access_token_conversion_facebook') {
-            return TokenEncryption::encrypt_decrypt($value, true);
+            return TokenEncryption::encrypt_decrypt($value, true); // true for decrypt
         }
-
+        
         return $value;
     }
 
@@ -61,7 +57,7 @@ class SocialLink extends Model
     {
         // If this is the Facebook access token, encrypt it before storage
         if ($this->name === 'access_token_conversion_facebook' && !empty($value)) {
-            $this->attributes['value'] = TokenEncryption::encrypt_decrypt($value, false);
+            $this->attributes['value'] = TokenEncryption::encrypt_decrypt($value, false); // false for encrypt
         } else {
             $this->attributes['value'] = $value;
         }
