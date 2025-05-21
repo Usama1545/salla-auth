@@ -56,11 +56,16 @@ class SocialLinkController extends Controller
         }
     }
 
+    /**
+     * Store or update social links.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function store(Request $request)
     {
         try {
             $user = Auth::user();
-
             $this->service->forUser($user);
 
             $storeInfo = $this->service->request('GET', 'https://api.salla.dev/admin/v2/store/info');
@@ -70,16 +75,19 @@ class SocialLinkController extends Controller
                 throw new \Exception('Unable to retrieve store ID from Salla');
             }
 
-
             foreach ($request->all() as $name => $value) {
-                $user->socialLinks()->updateOrCreate(['name' => $name, 'store_id' => $storeId,], ['name' => $name, 'value' => $value, 'store_id' => $storeId,]);
+                // Don't modify the value, let the model handle the encryption
+                $user->socialLinks()->updateOrCreate(
+                    ['name' => $name, 'store_id' => $storeId],
+                    ['value' => $value]
+                );
             }
 
             return response()->json([
-                'message' => __('response.updated', ['object' => __("models.SocialLink")]),
+                'message' => 'Social links updated successfully'
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to create social link: ' . $e->getMessage());
+            Log::error('Failed to update social links: ' . $e->getMessage());
             return response()->json([
                 'message' => 'error',
                 'data' => [
@@ -119,17 +127,16 @@ class SocialLinkController extends Controller
                 $query->where('name', $name);
             }
             
+            // Get all social links first
             $socialLinks = $query->get();
             
-            // Format the response
+            // Format the response, excluding the Facebook access token
             $formattedLinks = [];
             foreach ($socialLinks as $link) {
-                // Skip access_token_conversion_facebook in the response for security
                 if ($link->name === 'access_token_conversion_facebook') {
-                    continue;
+                    continue; // Skip the Facebook access token
                 }
-                
-                $formattedLinks[$link->name] = $link->value;
+                $formattedLinks[$link->name] = is_string($link->value) ? $link->value : '';
             }
             
             return response()->json([
@@ -182,7 +189,7 @@ class SocialLinkController extends Controller
             }
             
             // Decrypt the access token
-            $accessToken = TokenEncryption::encrypt_decrypt($socialLink->value, true);
+            $accessToken = $socialLink->value;
             
             if (empty($accessToken)) {
                 Log::error('Facebook Conversion API: Invalid Facebook access token');

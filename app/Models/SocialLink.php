@@ -22,6 +22,15 @@ class SocialLink extends Model
     protected $hidden = [];
 
     /**
+     * The attributes that should be cast.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'value' => 'encrypted'
+    ];
+
+    /**
      * Get the user that owns the social link.
      *
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
@@ -34,13 +43,13 @@ class SocialLink extends Model
     /**
      * Get the value attribute.
      *
-     * @param  string  $value
-     * @return string
+     * @param  string|null  $value
+     * @return string|null
      */
     public function getValueAttribute($value)
     {
-        // If this is the Facebook access token, it's stored encrypted
-        if ($this->name === 'access_token_conversion_facebook') {
+        // If this is the Facebook access token, decrypt it
+        if ($this->name === 'access_token_conversion_facebook' && $value !== null) {
             return TokenEncryption::encrypt_decrypt($value, true); // true for decrypt
         }
         
@@ -50,16 +59,27 @@ class SocialLink extends Model
     /**
      * Set the value attribute.
      *
-     * @param  string  $value
+     * @param  string|null  $value
      * @return void
      */
     public function setValueAttribute($value)
     {
         // If this is the Facebook access token, encrypt it before storage
-        if ($this->name === 'access_token_conversion_facebook' && !empty($value)) {
+        if ($this->name === 'access_token_conversion_facebook' && $value !== null) {
             $this->attributes['value'] = TokenEncryption::encrypt_decrypt($value, false); // false for encrypt
         } else {
             $this->attributes['value'] = $value;
         }
+    }
+
+    /**
+     * Scope a query to exclude Facebook access token.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeExcludeFacebookToken($query)
+    {
+        return $query->where('name', '!=', 'access_token_conversion_facebook');
     }
 }
